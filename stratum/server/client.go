@@ -148,9 +148,12 @@ func (c *WorkerConnection) HandleMessage(message *JsonRpcRequest, connection con
 
 	// TODO: fix
 	// sc.SendMiningJob(sc.JobManager.CurrentJob.GetJobParams(true))
-	//case "mining.submit":
+	case "mining.submit":
 	//	sc.LastActivity = time.Now()
-	//	sc.HandleSubmit(message)
+		err := c.HandleSubmit(message,connection.remoteAddr)
+		if err!=nil {
+			return err
+		}
 	default:
 		logger.Log.Warn().Str("unknown stratum method", string(Jsonify(message))).Send()
 	}
@@ -244,6 +247,13 @@ func (c *WorkerConnection) HandleSubscribe(message *JsonRpcRequest) (*JsonRpcRes
 	}
 	return resp,nil
 }
+
+
+func (c *WorkerConnection) HandleSubmit(message *JsonRpcRequest, remoteAddress string) (*JsonRpcResponse, error) {
+	c.logInfo().Msg("handling submit")
+	return nil,nil
+}
+
 
 
 func (c *WorkerConnection) logTrace() *zerolog.Event {
