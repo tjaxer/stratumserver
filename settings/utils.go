@@ -35,8 +35,6 @@ type RPCConfig struct {
 	Network NetworkConfig `yaml:"network"`
 }
 
-
-
 type NetworkConfigBitcoin struct {
 	Host       string `yaml:"host"`
 	Port       uint16 `yaml:"port"`

@@ -11,30 +11,26 @@ import (
 	"github.com/tjaxer/stratumserver/stratum/types"
 	"math/big"
 
+	"crypto/rand"
 	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
-	"crypto/rand"
 )
 
-
-
-
-
 type WorkerConnection struct {
-	SubscriptionId string
-	LastActivity time.Time
-	Shares       *Shares
+	SubscriptionId         string
+	LastActivity           time.Time
+	Shares                 *Shares
 	SubscriptionBeforeAuth bool
-	ExtraNonce1 []byte
-	VarDiff *vardiff.VarDiff
-	worker uint64
+	ExtraNonce1            []byte
+	VarDiff                *vardiff.VarDiff
+	worker                 uint64
 
 	// auth info
-	WorkerName string
-	WorkerPass string
-	IsAuthorized           bool
+	WorkerName   string
+	WorkerPass   string
+	IsAuthorized bool
 
 	Subscribed bool
 
@@ -42,32 +38,29 @@ type WorkerConnection struct {
 	PendingDifficulty  *big.Float
 	CurrentDifficulty  *big.Float
 	PreviousDifficulty *big.Float
-	ConnectionTimeout int
-	TcpProxyProtocol bool
-	SocketClosedEvent chan struct{}
-	id int
-	job atomic.Value
+	ConnectionTimeout  int
+	TcpProxyProtocol   bool
+	SocketClosedEvent  chan struct{}
+	id                 int
+	job                atomic.Value
 }
-
-
 
 func (miner *WorkerConnection) newJob(job *Job) {
 	miner.job.Store(job)
 }
-
 
 func NewStratumClient(
 
 	InitialDifficulty float64,
 	ConnectionTimeout int,
 	TcpProxyProtocol bool,
-	MinDiff         float64,
-	MaxDiff        float64,
-	TargetTime      int64,
-	RetargetTime    int64,
+	MinDiff float64,
+	MaxDiff float64,
+	TargetTime int64,
+	RetargetTime int64,
 	VariancePercent float64,
-	X2Mode          bool,
-	) *WorkerConnection {
+	X2Mode bool,
+) *WorkerConnection {
 
 	var varDiff *vardiff.VarDiff
 
@@ -83,12 +76,12 @@ func NewStratumClient(
 	_, _ = rand.Read(extraNonce1)
 
 	return &WorkerConnection{
-		SubscriptionId: uuid.New().String(),
+		SubscriptionId:         uuid.New().String(),
 		PendingDifficulty:      big.NewFloat(0),
 		LastActivity:           time.Now(),
 		SubscriptionBeforeAuth: false,
 		VarDiff:                varDiff,
-		InitialDifficulty:		InitialDifficulty,
+		InitialDifficulty:      InitialDifficulty,
 		ConnectionTimeout:      ConnectionTimeout,
 		TcpProxyProtocol:       TcpProxyProtocol,
 		Shares:                 new(Shares),
@@ -97,11 +90,10 @@ func NewStratumClient(
 	}
 }
 
-
 //WorkerConnection
-func (c *WorkerConnection) difficulyJsonMessage(difficulty *big.Float) (*JsonRpcRequest,error) {
+func (c *WorkerConnection) difficulyJsonMessage(difficulty *big.Float) (*JsonRpcRequest, error) {
 	text, err := difficulty.MarshalText()
-	if err!=nil {
+	if err != nil {
 		return nil, err
 	}
 
@@ -117,41 +109,41 @@ func (c *WorkerConnection) HandleMessage(message *JsonRpcRequest, connection con
 	switch message.Method {
 	case "mining.subscribe":
 
-		resp,err := c.HandleSubscribe(message)
-		if err!=nil {
+		resp, err := c.HandleSubscribe(message)
+		if err != nil {
 			return err
 		}
 		err = connection.SendJsonRPC(resp)
-		if err!=nil {
+		if err != nil {
 			return err
 		}
 		c.Subscribed = true
 	case "mining.authorize":
-		resp,err := c.HandleAuthorize(message, connection.remoteAddr)
-		if err!=nil {
+		resp, err := c.HandleAuthorize(message, connection.remoteAddr)
+		if err != nil {
 			return err
 		}
 		err = connection.SendJsonRPC(resp)
-		if err!=nil {
+		if err != nil {
 			return err
 		}
 		// the init Diff for miners
 		c.logInfo().Float64("difficulty", c.InitialDifficulty).Msg("initial difficulty")
-		msg,err:=c.difficulyJsonMessage(big.NewFloat(c.InitialDifficulty))
-		if err!=nil {
+		msg, err := c.difficulyJsonMessage(big.NewFloat(c.InitialDifficulty))
+		if err != nil {
 			return err
 		}
 		err = connection.SendJsonRPC(msg)
-		if err!=nil {
+		if err != nil {
 			return err
 		}
 
 	// TODO: fix
 	// sc.SendMiningJob(sc.JobManager.CurrentJob.GetJobParams(true))
 	case "mining.submit":
-	//	sc.LastActivity = time.Now()
-		err := c.HandleSubmit(message,connection.remoteAddr)
-		if err!=nil {
+		//	sc.LastActivity = time.Now()
+		err := c.HandleSubmit(message, connection.remoteAddr)
+		if err != nil {
 			return err
 		}
 	default:
@@ -159,7 +151,6 @@ func (c *WorkerConnection) HandleMessage(message *JsonRpcRequest, connection con
 	}
 	return nil
 }
-
 
 // AuthorizeFn validates worker name and rig name.
 func (c *WorkerConnection) AuthorizeFn(remoteAddress string, workerName string, password string) (authorized bool, err error) {
@@ -181,7 +172,7 @@ func (c *WorkerConnection) AuthorizeFn(remoteAddress string, workerName string, 
 	// Miner should be in UUID v4 format.
 	_, err = uuid.Parse(miner)
 	if err != nil {
-		return false,  fmt.Errorf("%s", types.ErrMinerInvalidFormat)
+		return false, fmt.Errorf("%s", types.ErrMinerInvalidFormat)
 	}
 
 	// Rig is a string with [a-zA-Z0-9]+ regexp format.
@@ -190,9 +181,8 @@ func (c *WorkerConnection) AuthorizeFn(remoteAddress string, workerName string, 
 		return false, fmt.Errorf("%s", types.ErrRigInvalidFormat)
 	}
 
-	return true,  nil
+	return true, nil
 }
-
 
 func (c *WorkerConnection) HandleAuthorize(message *JsonRpcRequest, remoteAddress string) (*JsonRpcResponse, error) {
 	c.logInfo().Msg("handling authorize")
@@ -200,29 +190,27 @@ func (c *WorkerConnection) HandleAuthorize(message *JsonRpcRequest, remoteAddres
 	c.WorkerName = string(message.Params[0])
 	c.WorkerPass = string(message.Params[1])
 
-	authorized,  err := c.AuthorizeFn(remoteAddress, c.WorkerName, c.WorkerPass)
+	authorized, err := c.AuthorizeFn(remoteAddress, c.WorkerName, c.WorkerPass)
 	c.IsAuthorized = err == nil && authorized
 	logger.Log.Info().Str("c.WorkerName", c.WorkerName).Bool("sc.IsAuthorized", c.IsAuthorized).Msg("worker authorized")
 
-		if c.IsAuthorized {
-			return &JsonRpcResponse{
-				Id:     message.Id,
-				Result: Jsonify(c.IsAuthorized),
-				Error:  nil,
-			}, nil
-		}
+	if c.IsAuthorized {
 		return &JsonRpcResponse{
-				Id:     message.Id,
-				Result: Jsonify(c.IsAuthorized),
-				Error: &JsonRpcError{
-					Code:    20,
-					Message: string(Jsonify(err)),
-				},
-			}, err
+			Id:     message.Id,
+			Result: Jsonify(c.IsAuthorized),
+			Error:  nil,
+		}, nil
+	}
+	return &JsonRpcResponse{
+		Id:     message.Id,
+		Result: Jsonify(c.IsAuthorized),
+		Error: &JsonRpcError{
+			Code:    20,
+			Message: string(Jsonify(err)),
+		},
+	}, err
 
 }
-
-
 
 func (c *WorkerConnection) HandleSubscribe(message *JsonRpcRequest) (*JsonRpcResponse, error) {
 	c.logInfo().Msg("handling subscribe")
@@ -232,12 +220,11 @@ func (c *WorkerConnection) HandleSubscribe(message *JsonRpcRequest) (*JsonRpcRes
 
 	//extraNonce2Size := sc.JobManager.ExtraNonce2Size
 
-
-	resp:= &JsonRpcResponse{
+	resp := &JsonRpcResponse{
 		Id: message.Id,
 		Result: Jsonify([]interface{}{
 			[][]string{
-				{"mining.set_difficulty", c.SubscriptionId },
+				{"mining.set_difficulty", c.SubscriptionId},
 				{"mining.notify", c.SubscriptionId},
 			},
 			hex.EncodeToString(c.ExtraNonce1),
@@ -245,16 +232,13 @@ func (c *WorkerConnection) HandleSubscribe(message *JsonRpcRequest) (*JsonRpcRes
 		}),
 		Error: nil,
 	}
-	return resp,nil
+	return resp, nil
 }
-
 
 func (c *WorkerConnection) HandleSubmit(message *JsonRpcRequest, remoteAddress string) (*JsonRpcResponse, error) {
 	c.logInfo().Msg("handling submit")
-	return nil,nil
+	return nil, nil
 }
-
-
 
 func (c *WorkerConnection) logTrace() *zerolog.Event {
 	return logger.Log.Trace().Str("component", "WorkerConnection")
@@ -264,7 +248,6 @@ func (c *WorkerConnection) logDebug() *zerolog.Event {
 	return logger.Log.Debug().Str("component", "WorkerConnection")
 }
 
-
 func (c *WorkerConnection) logInfo() *zerolog.Event {
 	return logger.Log.Info().Str("component", "WorkerConnection")
 }
@@ -272,7 +255,6 @@ func (c *WorkerConnection) logInfo() *zerolog.Event {
 func (c *WorkerConnection) logWarn() *zerolog.Event {
 	return logger.Log.Warn().Str("component", "WorkerConnection")
 }
-
 
 func (c *WorkerConnection) logErr(err error) *zerolog.Event {
 	return logger.Log.Err(err).Str("component", "WorkerConnection")

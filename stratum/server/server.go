@@ -16,7 +16,6 @@ import (
 	"github.com/tjaxer/stratumserver/logger"
 )
 
-
 // shutdownPollInterval is how often we poll for quiescence
 // during Server.Shutdown. This is lower during tests, to
 // speed up tests.
@@ -25,7 +24,6 @@ import (
 // involve any contentious mutexes), but that is left as an
 // exercise for the reader.
 var shutdownPollInterval = 500 * time.Millisecond
-
 
 // maxInt64 is the effective "infinite" value for the Server and
 // Transport's byte-limiting readers.
@@ -40,7 +38,6 @@ type atomicBool int32
 func (b *atomicBool) isSet() bool { return atomic.LoadInt32((*int32)(b)) != 0 }
 func (b *atomicBool) setTrue()    { atomic.StoreInt32((*int32)(b), 1) }
 func (b *atomicBool) setFalse()   { atomic.StoreInt32((*int32)(b), 0) }
-
 
 // connReader is the io.Reader wrapper used by *conn. It combines a
 // selectively-activated io.LimitedReader (to bound request header
@@ -202,11 +199,6 @@ func (cr *connReader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-
-
-
-
-
 var (
 	bufioReaderPool   sync.Pool
 	bufioWriter2kPool sync.Pool
@@ -229,7 +221,6 @@ func bufioWriterPool(size int) *sync.Pool {
 	}
 	return nil
 }
-
 
 func putBufioReader(br *bufio.Reader) {
 	br.Reset(nil)
@@ -266,7 +257,6 @@ func newBufioWriterSize(w io.Writer, size int) *bufio.Writer {
 	return bufio.NewWriterSize(w, size)
 }
 
-
 // checkConnErrorWriter writes to c.rwc and records any write errors to c.werr.
 // It only contains one field (and a pointer field at that), so it
 // fits in an interface value without an extra allocation.
@@ -283,13 +273,12 @@ func (w checkConnErrorWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-
 func (c *conn) setState(nc net.Conn, state ConnState) {
 	srv := c.server
 	switch state {
 	case StateNew:
 		srv.trackConn(c, true)
-	case  StateClosed:
+	case StateClosed:
 		srv.trackConn(c, false)
 	}
 	if state > 0xff || state < 0 {
@@ -307,7 +296,6 @@ func (c *conn) getState() (state ConnState, unixSec int64) {
 	return ConnState(packedState & 0xff), int64(packedState >> 8)
 }
 
-
 type Server struct {
 	// Addr optionally specifies the TCP address for the server to listen on,
 	// in the form "host:port". If empty, ":http" (port 80) is used.
@@ -323,8 +311,6 @@ type Server struct {
 	// SetSessionTicketKeys, use Server.Serve with a TLS Listener
 	// instead.
 	TLSConfig *tls.Config
-
-
 
 	// ReadTimeout is the maximum duration for reading the entire
 	// request, including the body.
@@ -378,8 +364,6 @@ type Server struct {
 	// ConnState type and associated constants for details.
 	ConnState func(net.Conn, ConnState)
 
-
-
 	// BaseContext optionally specifies a function that returns
 	// the base context for incoming requests on this server.
 	// The provided Listener is the specific Listener that's
@@ -405,7 +389,6 @@ type Server struct {
 	activeConn map[*conn]struct{}
 	doneChan   chan struct{}
 	onShutdown []func()
-
 }
 
 // DefaultMaxStartReadBytes is the maximum permitted size of the start message
@@ -430,8 +413,6 @@ func (s *Server) readHeaderTimeout() time.Duration {
 	return s.ReadTimeout
 }
 
-
-
 func (s *Server) closeDoneChanLocked() {
 	ch := s.getDoneChanLocked()
 	select {
@@ -443,10 +424,6 @@ func (s *Server) closeDoneChanLocked() {
 		close(ch)
 	}
 }
-
-
-
-
 
 func (s *Server) trackConn(c *conn, add bool) {
 	s.mu.Lock()
@@ -460,8 +437,6 @@ func (s *Server) trackConn(c *conn, add bool) {
 		delete(s.activeConn, c)
 	}
 }
-
-
 
 // ListenAndServe listens on the TCP network address srv.Addr and then
 // calls Serve to handle requests on incoming connections.
@@ -489,7 +464,6 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) shuttingDown() bool {
 	return s.inShutdown.isSet()
 }
-
 
 // trackListener adds or removes a net.Listener to the set of tracked
 // listeners.
@@ -532,7 +506,6 @@ type contextKey struct {
 
 func (k *contextKey) String() string { return "net/http context value " + k.name }
 
-
 var (
 	// ServerContextKey is a context key. It can be used in HTTP
 	// handlers with Context.Value to access the server that
@@ -547,7 +520,6 @@ var (
 	LocalAddrContextKey = &contextKey{"local-addr"}
 )
 
-
 func (s *Server) getDoneChan() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -560,7 +532,6 @@ func (s *Server) getDoneChanLocked() chan struct{} {
 	}
 	return s.doneChan
 }
-
 
 // Serve accepts incoming connections on the Listener l, creating a
 // new service goroutine for each. The service goroutines read requests and
@@ -638,15 +609,11 @@ func (s *Server) Serve(l net.Listener) error {
 	}
 }
 
-
 // ErrAbortHandler is a sentinel panic value to abort a handler.
 // While any panic from ServeHTTP aborts the response to the client,
 // panicking with ErrAbortHandler also suppresses logging of a stack
 // trace to the server's error log.
 var ErrAbortHandler = errors.New("net/http: abort Handler")
-
-
-
 
 // Shutdown gracefully shuts down the server without interrupting any
 // active connections. Shutdown works by first closing all open
@@ -710,7 +677,6 @@ func (s *Server) numListeners() int {
 	return len(s.listeners)
 }
 
-
 // debugServerConnections controls whether all server connections are wrapped
 // with a verbose logging wrapper.
 const debugServerConnections = false
@@ -736,7 +702,7 @@ type loggingConn struct {
 func (c *loggingConn) Write(p []byte) (n int, err error) {
 	c.logDebug().Str("name", c.name).Int("len", len(p)).Msg("Write ...")
 	n, err = c.Conn.Write(p)
-	if err!=nil {
+	if err != nil {
 		c.logErr(err).Str("name", c.name).Int("len", len(p)).Int("written", n).Msg("Write")
 	} else {
 		c.logDebug().Str("name", c.name).Int("len", len(p)).Int("written", n).Msg("Write")
@@ -747,7 +713,7 @@ func (c *loggingConn) Write(p []byte) (n int, err error) {
 func (c *loggingConn) Read(p []byte) (n int, err error) {
 	c.logDebug().Str("name", c.name).Int("len", len(p)).Msg("Read ...")
 	n, err = c.Conn.Read(p)
-	if err!=nil {
+	if err != nil {
 		c.logErr(err).Str("name", c.name).Int("len", len(p)).Int("readed", n).Msg("Read")
 	} else {
 		c.logDebug().Str("name", c.name).Int("len", len(p)).Int("readed", n).Msg("Read")
@@ -759,14 +725,13 @@ func (c *loggingConn) Read(p []byte) (n int, err error) {
 func (c *loggingConn) Close() (err error) {
 	c.logDebug().Str("name", c.name).Msg("Close() ...")
 	err = c.Conn.Close()
-	if err!=nil {
+	if err != nil {
 		c.logErr(err).Str("name", c.name).Msg("Close()")
 	} else {
 		c.logDebug().Str("name", c.name).Msg("Close()")
 	}
 	return
 }
-
 
 func (c *loggingConn) logTrace() *zerolog.Event {
 	return logger.Log.Trace().Str("component", "loggingConn")
@@ -776,7 +741,6 @@ func (c *loggingConn) logDebug() *zerolog.Event {
 	return logger.Log.Debug().Str("component", "loggingConn")
 }
 
-
 func (c *loggingConn) logInfo() *zerolog.Event {
 	return logger.Log.Info().Str("component", "loggingConn")
 }
@@ -784,7 +748,6 @@ func (c *loggingConn) logInfo() *zerolog.Event {
 func (c *loggingConn) logErr(err error) *zerolog.Event {
 	return logger.Log.Err(err).Str("component", "loggingConn")
 }
-
 
 func newLoggingConn(baseName string, c net.Conn) net.Conn {
 	uniqNameMu.Lock()
@@ -803,7 +766,6 @@ var (
 	uniqNameNext = make(map[string]int)
 )
 
-
 // cloneTLSConfig returns a shallow clone of cfg, or a new zero tls.Config if
 // cfg is nil. This is safe to call even if cfg is in active use by a TLS
 // client or server.
@@ -813,7 +775,6 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	}
 	return cfg.Clone()
 }
-
 
 // ListenAndServeTLS listens on the TCP network address srv.Addr and
 // then calls ServeTLS to handle requests on incoming TLS connections.
@@ -849,7 +810,6 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	return s.ServeTLS(ln, certFile, keyFile)
 }
 
-
 // ServeTLS accepts incoming connections on the Listener l, creating a
 // new service goroutine for each. The service goroutines perform TLS
 // setup and then read requests, calling srv.Handler to reply to them.
@@ -874,7 +834,6 @@ func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
 
 	config := cloneTLSConfig(s.TLSConfig)
 
-
 	configHasCert := len(config.Certificates) > 0 || config.GetCertificate != nil
 	if !configHasCert || certFile != "" || keyFile != "" {
 		var err error
@@ -888,7 +847,6 @@ func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
 	tlsListener := tls.NewListener(l, config)
 	return s.Serve(tlsListener)
 }
-
 
 // closeIdleConns closes all idle connections and reports whether the
 // server is quiescent.
@@ -926,7 +884,6 @@ func (s *Server) closeListenersLocked() error {
 	return err
 }
 
-
 // A ConnState represents the state of a client connection to a server.
 // It's used by the optional Server.ConnState hook.
 type ConnState int
@@ -957,8 +914,6 @@ const (
 	// to either StateActive or StateClosed.
 	StateIdle
 
-
-
 	// StateClosed represents a closed connection.
 	// This is a terminal state. Hijacked connections do not
 	// transition to StateClosed.
@@ -966,16 +921,15 @@ const (
 )
 
 var stateName = map[ConnState]string{
-	StateNew:      "new",
-	StateActive:   "active",
-	StateIdle:     "idle",
-	StateClosed:   "closed",
+	StateNew:    "new",
+	StateActive: "active",
+	StateIdle:   "idle",
+	StateClosed: "closed",
 }
 
 func (c ConnState) String() string {
 	return stateName[c]
 }
-
 
 // onceCloseListener wraps a net.Listener, protecting it from
 // multiple Close calls.
@@ -992,8 +946,6 @@ func (oc *onceCloseListener) Close() error {
 
 func (oc *onceCloseListener) close() { oc.closeErr = oc.Listener.Close() }
 
-
-
 const loggerComponent = "stratum server"
 
 func (s *Server) logTrace() *zerolog.Event {
@@ -1004,7 +956,6 @@ func (s *Server) logDebug() *zerolog.Event {
 	return logger.Log.Debug().Str("component", loggerComponent)
 }
 
-
 func (s *Server) logInfo() *zerolog.Event {
 	return logger.Log.Info().Str("component", loggerComponent)
 }
@@ -1012,4 +963,3 @@ func (s *Server) logInfo() *zerolog.Event {
 func (s *Server) logErr(err error) *zerolog.Event {
 	return logger.Log.Err(err).Str("component", loggerComponent)
 }
-

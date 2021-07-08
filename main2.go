@@ -2,15 +2,15 @@ package main
 
 import (
 	//"context"
+	"context"
 	"fmt"
-	"github.com/tjaxer/stratumserver/ctx"
 	appctx "github.com/nixys/nxs-go-appctx/v2"
 	"github.com/sirupsen/logrus"
+	"github.com/tjaxer/stratumserver/ctx"
 	"github.com/tjaxer/stratumserver/logger"
+	server "github.com/tjaxer/stratumserver/routines/stratum-server"
 	"os"
 	"syscall"
-	"context"
-	server "github.com/tjaxer/stratumserver/routines/stratum-server"
 )
 
 func init() {
@@ -20,8 +20,6 @@ func init() {
 func main() {
 	// Read command line arguments
 	args := ctx.ArgsRead()
-
-
 
 	// Init appctx
 	appCtx, err := appctx.ContextInit(appctx.Settings{

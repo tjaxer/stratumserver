@@ -2,7 +2,6 @@ package vardiff
 
 import (
 	"time"
-
 )
 
 type VarDiff struct {
@@ -20,31 +19,30 @@ type VarDiff struct {
 	RetargetTime    int64
 	VariancePercent float64
 	X2Mode          bool
-
 }
 
-func NewVarDiff( MinDiff         float64,
-                 MaxDiff        float64,
-                 TargetTime      int64,
-                 RetargetTime    int64,
-                 VariancePercent float64,
-                 X2Mode          bool) *VarDiff {
+func NewVarDiff(MinDiff float64,
+	MaxDiff float64,
+	TargetTime int64,
+	RetargetTime int64,
+	VariancePercent float64,
+	X2Mode bool) *VarDiff {
 	timestamp := time.Now().Unix()
 	bufferSize := RetargetTime / TargetTime * 4
 	return &VarDiff{
-		BufferSize:     bufferSize,
-		MaxTargetTime:  float64(TargetTime) * (1 + VariancePercent),
-		MinTargetTime:  float64(TargetTime) * (1 - VariancePercent),
-		TimeBuffer:     NewRingBuffer(bufferSize),
-		LastRtc:        timestamp - RetargetTime/2,
-		LastTimestamp:  timestamp,
+		BufferSize:    bufferSize,
+		MaxTargetTime: float64(TargetTime) * (1 + VariancePercent),
+		MinTargetTime: float64(TargetTime) * (1 - VariancePercent),
+		TimeBuffer:    NewRingBuffer(bufferSize),
+		LastRtc:       timestamp - RetargetTime/2,
+		LastTimestamp: timestamp,
 
-		MinDiff:        MinDiff,
-		MaxDiff:        MaxDiff,
-		TargetTime:     TargetTime,
-		RetargetTime:   RetargetTime,
-		VariancePercent:VariancePercent,
-		X2Mode:         X2Mode,
+		MinDiff:         MinDiff,
+		MaxDiff:         MaxDiff,
+		TargetTime:      TargetTime,
+		RetargetTime:    RetargetTime,
+		VariancePercent: VariancePercent,
+		X2Mode:          X2Mode,
 	}
 }
 

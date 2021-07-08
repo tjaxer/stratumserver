@@ -19,7 +19,7 @@ type Configuration struct {
 	NumCPU int
 
 	Network struct {
-		Name   string
+		Name string
 		//Beacon struct {
 		//	Discovering struct {
 		//		RPC RPCConfig
@@ -150,9 +150,9 @@ func (s *Configuration) defaultBitcoinRPCConfig() *btcdrpcclient.ConnConfig {
 }
 
 type Settings struct {
-	Debug            bool   `yaml:"debug"`
-	NumCPU           int    `yaml:"num_cpu"`
-	EnableBTCMining  bool   `yaml:"enable_btc_mining"`
+	Debug           bool `yaml:"debug"`
+	NumCPU          int  `yaml:"num_cpu"`
+	EnableBTCMining bool `yaml:"enable_btc_mining"`
 	//BurnBtcReward    bool   `yaml:"burn_btc"`
 	//BurnJaxReward    bool   `yaml:"burn_jax"`
 	//BurnJaxNetReward bool   `yaml:"burn_jaxnet"`

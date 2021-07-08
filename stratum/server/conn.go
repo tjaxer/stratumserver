@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-
-
 // A conn represents the server side of an HTTP connection.
 type conn struct {
 	// server is the server on which the connection arrived.
@@ -119,7 +117,6 @@ func (c *conn) closeWriteAndWait() {
 	time.Sleep(rstAvoidanceDelay)
 }
 
-
 func (c *conn) SendJsonRPC(jsonRPCs JsonRpc) error {
 	raw := jsonRPCs.Json()
 
@@ -140,7 +137,6 @@ func (c *conn) SendJsonRPC(jsonRPCs JsonRpc) error {
 	return nil
 }
 
-
 func (c *conn) logTrace() *zerolog.Event {
 	return logger.Log.Trace().Str("component", "stratum connection")
 }
@@ -148,7 +144,6 @@ func (c *conn) logTrace() *zerolog.Event {
 func (c *conn) logDebug() *zerolog.Event {
 	return logger.Log.Debug().Str("component", "stratum connection")
 }
-
 
 func (c *conn) logInfo() *zerolog.Event {
 	return logger.Log.Info().Str("component", "stratum connection")
@@ -158,11 +153,9 @@ func (c *conn) logWarn() *zerolog.Event {
 	return logger.Log.Warn().Str("component", "stratum connection")
 }
 
-
 func (c *conn) logErr(err error) *zerolog.Event {
 	return logger.Log.Err(err).Str("component", "stratum connection")
 }
-
 
 //var errTooLarge = errors.New("http: request too large")
 
@@ -171,7 +164,7 @@ func (c *conn) readMessage(ctx context.Context) (message *JsonRpcRequest, err er
 
 	var (
 		//wholeReqDeadline time.Time // or zero if none
-		hdrDeadline      time.Time // or zero if none
+		hdrDeadline time.Time // or zero if none
 	)
 	t0 := time.Now()
 	if d := c.server.readHeaderTimeout(); d != 0 {
@@ -189,7 +182,7 @@ func (c *conn) readMessage(ctx context.Context) (message *JsonRpcRequest, err er
 
 	c.r.setReadLimit(c.server.initialReadLimitSize())
 	raw, err := c.bufr.ReadBytes('\n')
-	if  err != nil {
+	if err != nil {
 		c.logErr(err).Msg("Read line")
 
 		return nil, err
@@ -279,7 +272,6 @@ func (c *conn) readMessage(ctx context.Context) (message *JsonRpcRequest, err er
 	return message, nil
 }
 
-
 // Serve a new connection.
 func (c *conn) serve(ctx context.Context) {
 	c.remoteAddr = c.rwc.RemoteAddr().String()
@@ -323,7 +315,6 @@ func (c *conn) serve(ctx context.Context) {
 		//}
 	}
 
-
 	ctx, cancelCtx := context.WithCancel(ctx)
 	c.cancelCtx = cancelCtx
 	defer cancelCtx()
@@ -332,9 +323,6 @@ func (c *conn) serve(ctx context.Context) {
 	c.bufr = newBufioReader(c.r)
 	c.bufw = newBufioWriterSize(checkConnErrorWriter{c}, 4<<10)
 	c.logDebug().Msg("connected")
-
-
-
 
 	// job_rebroadcast_timeout: 600
 	//  tcp_proxy_protocol: false
@@ -350,33 +338,25 @@ func (c *conn) serve(ctx context.Context) {
 	//      variance_percent: 30
 	//    tls: false
 	worker := NewStratumClient(
-		5, // InitialDifficulty float64,
-		600, // ConnectionTimeout int,
-		false,// TcpProxyProtocol bool,
-		1, // MinDiff         float64,
-		100000,// MaxDiff        float64,
-		15, // TargetTime      int64,
-		90,// RetargetTime    int64,
-		30, // VariancePercent float64,
-		false,// X2Mode          bool,
+		5,      // InitialDifficulty float64,
+		600,    // ConnectionTimeout int,
+		false,  // TcpProxyProtocol bool,
+		1,      // MinDiff         float64,
+		100000, // MaxDiff        float64,
+		15,     // TargetTime      int64,
+		90,     // RetargetTime    int64,
+		30,     // VariancePercent float64,
+		false,  // X2Mode          bool,
 
 	)
 
-
-
 	for {
-
 
 		message, err := c.readMessage(ctx)
 		if c.r.remain != c.server.initialReadLimitSize() {
 			// If we read any bytes off the wire, we're active.
 			c.setState(c.rwc, StateActive)
 		}
-
-
-
-
-
 
 		//select {
 		//case <-sc.SocketClosedEvent:
@@ -425,30 +405,28 @@ func (c *conn) serve(ctx context.Context) {
 		//	continue
 		//}
 
-
-
 		//sc.BanningManager.CheckBan(sc.RemoteAddress.String())
 
 		if &message != nil {
 			logger.Log.Debug().Str("client message", string(message.Json())).Msg("handling message")
 			var resp *JsonRpcResponse
 			switch message.Method {
-				case "mining.subscribe":
-					resp,err =  worker.HandleSubscribe(message)
-				case "mining.authorize":
-					resp,err =  worker.HandleAuthorize(message, c.remoteAddr)
-			//case "mining.submit":
-			//	sc.LastActivity = time.Now()
-			//	sc.HandleSubmit(message)
-				default:
-					logger.Log.Warn().Str("unknown stratum method", string(Jsonify(message))).Send()
-				}
+			case "mining.subscribe":
+				resp, err = worker.HandleSubscribe(message)
+			case "mining.authorize":
+				resp, err = worker.HandleAuthorize(message, c.remoteAddr)
+				//case "mining.submit":
+				//	sc.LastActivity = time.Now()
+				//	sc.HandleSubmit(message)
+			default:
+				logger.Log.Warn().Str("unknown stratum method", string(Jsonify(message))).Send()
+			}
 
-			if err!=nil {
+			if err != nil {
 				c.logErr(err)
 				return
 			}
-			if resp!=nil {
+			if resp != nil {
 				if err := c.SendJsonRPC(resp); err != nil {
 					c.logErr(err)
 					return
@@ -566,4 +544,3 @@ func (c *conn) serve(ctx context.Context) {
 	//	c.rwc.SetReadDeadline(time.Time{})
 	//}
 }
-
