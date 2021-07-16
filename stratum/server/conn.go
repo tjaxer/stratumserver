@@ -6,9 +6,13 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	btcdutil "github.com/btcsuite/btcutil"
 	"github.com/rs/zerolog"
 	"github.com/tjaxer/stratumserver/logger"
+	"github.com/tjaxer/stratumserver/miner"
+	"github.com/tjaxer/stratumserver/stratum/server2/utils"
 	"io"
+	"math/big"
 	"net"
 	"runtime"
 	"sync/atomic"
@@ -338,11 +342,11 @@ func (c *conn) serve(ctx context.Context) {
 	//      variance_percent: 30
 	//    tls: false
 	worker := NewStratumClient(
-		5,      // InitialDifficulty float64,
+		2,      // InitialDifficulty float64,
 		600,    // ConnectionTimeout int,
 		false,  // TcpProxyProtocol bool,
-		1,      // MinDiff         float64,
-		100000, // MaxDiff        float64,
+		2,      // MinDiff         float64,
+		5, // MaxDiff        float64,
 		15,     // TargetTime      int64,
 		90,     // RetargetTime    int64,
 		30,     // VariancePercent float64,
@@ -411,17 +415,79 @@ func (c *conn) serve(ctx context.Context) {
 			logger.Log.Debug().Str("client message", string(message.Json())).Msg("handling message")
 			var resp *JsonRpcResponse
 			switch message.Method {
-			case "mining.subscribe":
-				resp, err = worker.HandleSubscribe(message)
-			case "mining.authorize":
-				resp, err = worker.HandleAuthorize(message, c.remoteAddr)
-				//case "mining.submit":
-				//	sc.LastActivity = time.Now()
-				//	sc.HandleSubmit(message)
-			default:
-				logger.Log.Warn().Str("unknown stratum method", string(Jsonify(message))).Send()
-			}
 
+				case "mining.subscribe":
+					resp, err = worker.HandleSubscribe(message)
+
+				case "mining.submit":
+					worker.LastActivity = time.Now()
+					c.logInfo().Msg("----- HandleSubmit  -----")
+
+					resp, err = worker.HandleSubmit(message, c.remoteAddr)
+					panic("Got submit !!!")
+
+				case "mining.authorize":
+						c.logInfo().Msg("----- HandleAuthorize  -----")
+						resp, err = worker.HandleAuthorize(message, c.remoteAddr)
+						if err != nil {
+							c.logErr(err).Msg("mining.authorize")
+						}
+						err = c.SendJsonRPC(resp)
+						if err != nil {
+							c.logErr(err).Msg("mining.authorize")
+						}
+						msg, err := worker.difficulyJsonMessage(big.NewFloat(worker.InitialDifficulty))
+						if err != nil {
+							c.logErr(err).Msg("create difficuly")
+						}
+						err = c.SendJsonRPC(msg)
+						if err != nil {
+							c.logErr(err).Msg("difficulyJsonMessage")
+						}
+
+						btcBlock := miner.Block100000
+						merkleBranch := make([]string, 0)
+						rb1:=btcdutil.NewBlock(&btcBlock)
+						part1, part2:= utils.SplitCoinbase(rb1.Transactions()[0].MsgTx())
+						rb1.MsgBlock().ClearTransactions()
+						//transactions:=rb1.Transactions()
+
+
+						//merkles := blockchain.BuildMerkleTreeStore(transactions[1:len(transactions)], false)
+						//merklePath := utils.MerkleTreeBranch(merkles)
+						//
+						//for _, merkle := range merklePath {
+						//	if merkle != nil {
+						//		merkleBranch = append(merkleBranch, merkle.String())
+						//	}
+						//}
+
+
+						job:=newJob("XXX-1",  // jobId string
+							hex.EncodeToString(
+								utils.ReverseByteOrder(
+									btcBlock.Header.PrevBlock.CloneBytes())), // prevHash string (reverced)
+							hex.EncodeToString(part1),//coinb1 string,
+							hex.EncodeToString(part2),//coinb2 string,
+							merkleBranch, //merkleBranch []string,
+							hex.EncodeToString(utils.PackInt32BE(btcBlock.Header.Version)), //version string,
+							hex.EncodeToString(utils.PackUint32BE(486604799)), //nBits string,
+							//hex.EncodeToString(utils.PackUint32BE(btcBlock.Header.Bits)), //nBits string,
+							hex.EncodeToString(utils.PackUint32BE(uint32(time.Now().Unix())))) //nTime string
+
+						// send new job
+						msg, err = worker.jobJsonMessage( job,true)
+						if err != nil {
+							c.logErr(err).Msg("difficulyJsonMessage")
+						}
+						err = c.SendJsonRPC(msg)
+						if err != nil {
+							c.logErr(err).Msg("difficulyJsonMessage")
+						}
+
+					default:
+						logger.Log.Warn().Str("unknown stratum method", string(Jsonify(message))).Send()
+					}
 			if err != nil {
 				c.logErr(err)
 				return

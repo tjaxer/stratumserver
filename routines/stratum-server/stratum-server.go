@@ -55,8 +55,8 @@ func servStart(appCtx *appctx.AppContext) *stratumServerContext {
 	s := &stratumServerContext{
 		Server: server.Server{
 			Addr:         cc.Conf.Bind,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
+			ReadTimeout:  3000 * time.Second,
+			WriteTimeout: 3000 * time.Second,
 		},
 		done: make(chan interface{}),
 	}

@@ -4,19 +4,28 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/btcsuite/btcd/blockchain"
+	btcdutil "github.com/btcsuite/btcutil"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/tjaxer/stratumserver/logger"
 	"github.com/tjaxer/stratumserver/stratum/server/vardiff"
+	"github.com/tjaxer/stratumserver/stratum/server2/utils"
+	//"github.com/jasonlvhit/gocron"
+
+	"github.com/tjaxer/stratumserver/miner"
+	//"github.com/tjaxer/stratumserver/stratum/server2/utils"
 	"github.com/tjaxer/stratumserver/stratum/types"
 	"math/big"
+	//"net"
 
-	"crypto/rand"
 	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
 )
+
+const ExtraNonce2Size=4
 
 type WorkerConnection struct {
 	SubscriptionId         string
@@ -45,7 +54,7 @@ type WorkerConnection struct {
 	job                atomic.Value
 }
 
-func (miner *WorkerConnection) newJob(job *Job) {
+func (miner *WorkerConnection) setJob(job *Job) {
 	miner.job.Store(job)
 }
 
@@ -73,8 +82,8 @@ func NewStratumClient(
 
 	// create random extranonce for worker
 	extraNonce1 := make([]byte, extraNonce1Size)
-	_, _ = rand.Read(extraNonce1)
-
+	//_, _ = rand.Read(extraNonce1)
+	extraNonce1,_  = hex.DecodeString("00000000")
 	return &WorkerConnection{
 		SubscriptionId:         uuid.New().String(),
 		PendingDifficulty:      big.NewFloat(0),
@@ -105,6 +114,41 @@ func (c *WorkerConnection) difficulyJsonMessage(difficulty *big.Float) (*JsonRpc
 	}, nil
 }
 
+
+func (c *WorkerConnection) jobJsonMessage(job *Job, forceUpdate bool) (*JsonRpcRequest, error) {
+
+	//return []interface{}{
+	//	job.JobId,
+	//	prevHashReversed,
+	//	hex.EncodeToString(parts[0]),
+	//	hex.EncodeToString(parts[1]),
+	//	merkleBranch,
+	//	hex.EncodeToString(utils.PackInt32BE(job.MinerTask.BitcoinBlockVersion)),
+	//	hex.EncodeToString(utils.PackUint32BE(job.MinerTask.BitcoinBlockBits)),
+	//	hex.EncodeToString(utils.PackUint32BE(uint32(time.Now().Unix()))), // Updated: implement time rolling
+	//	forceUpdate,
+	//}
+
+	params:= make([]json.RawMessage, 9)
+	params[0] = Jsonify(job.jobId)
+	params[1] = Jsonify(job.prevHash)
+	params[2] = Jsonify(job.coinb1)
+	params[3] = Jsonify(job.coinb2)
+	params[4] = Jsonify(job.merkleBranch)
+	params[5] = Jsonify(job.version)
+	params[6] = Jsonify(job.nBits)
+	params[7] = Jsonify(job.nTime)
+	params[8] = Jsonify(forceUpdate)
+
+	ret:=&JsonRpcRequest{
+		Id:     3,
+		Method: "mining.notify",
+		Params: params,
+	}
+
+	return ret,nil
+}
+
 func (c *WorkerConnection) HandleMessage(message *JsonRpcRequest, connection conn) error {
 	switch message.Method {
 	case "mining.subscribe":
@@ -119,16 +163,18 @@ func (c *WorkerConnection) HandleMessage(message *JsonRpcRequest, connection con
 		}
 		c.Subscribed = true
 	case "mining.authorize":
+		c.logInfo().Msg("----- here is it 1  -----")
 		resp, err := c.HandleAuthorize(message, connection.remoteAddr)
 		if err != nil {
+			c.logInfo().Msg("----- here is error  -----")
 			return err
 		}
 		err = connection.SendJsonRPC(resp)
 		if err != nil {
+			c.logInfo().Msg("----- here is error  2 -----")
 			return err
 		}
-		// the init Diff for miners
-		c.logInfo().Float64("difficulty", c.InitialDifficulty).Msg("initial difficulty")
+		c.logInfo().Msg("----- here is it 2  -----")
 		msg, err := c.difficulyJsonMessage(big.NewFloat(c.InitialDifficulty))
 		if err != nil {
 			return err
@@ -138,11 +184,55 @@ func (c *WorkerConnection) HandleMessage(message *JsonRpcRequest, connection con
 			return err
 		}
 
+
+
+
+		btcBlock := miner.Block100000
+		merkleBranch := make([]string, 0)
+		transactions:=btcdutil.NewBlock(&btcBlock).Transactions()
+		merkles := blockchain.BuildMerkleTreeStore(transactions[1:len(transactions)], false)
+		merklePath := utils.MerkleTreeBranch(merkles)
+
+		for _, merkle := range merklePath {
+			if merkle != nil {
+				merkleBranch = append(merkleBranch, merkle.String())
+			}
+		}
+
+
+		part1, part2:= utils.SplitCoinbase(transactions[0].MsgTx())
+		job:=newJob("XXX-1",  // jobId string
+			hex.EncodeToString(
+				utils.ReverseByteOrder(
+					btcBlock.Header.PrevBlock.CloneBytes())), // prevHash string (reverced)
+			hex.EncodeToString(part1),//coinb1 string,
+			hex.EncodeToString(part2),//coinb2 string,
+			merkleBranch, //merkleBranch []string,
+			hex.EncodeToString(utils.PackInt32BE(btcBlock.Header.Version)), //version string,
+			hex.EncodeToString(utils.PackUint32BE(486604799)), //nBits string,
+			//hex.EncodeToString(utils.PackUint32BE(btcBlock.Header.Bits)), //nBits string,
+			hex.EncodeToString(utils.PackUint32BE(uint32(time.Now().Unix())))) //nTime string
+
+		// send new job
+		msg, err = c.jobJsonMessage( job,true)
+		if err != nil {
+			return err
+		}
+		c.logInfo().Msg("----- here is it -----")
+		err = connection.SendJsonRPC(msg)
+		if err != nil {
+			return err
+		}
+
 	// TODO: fix
 	// sc.SendMiningJob(sc.JobManager.CurrentJob.GetJobParams(true))
 	case "mining.submit":
 		//	sc.LastActivity = time.Now()
-		err := c.HandleSubmit(message, connection.remoteAddr)
+		msg, err := c.HandleSubmit(message, connection.remoteAddr)
+		if err != nil {
+			return err
+		}
+		err = connection.SendJsonRPC(msg)
 		if err != nil {
 			return err
 		}
@@ -220,15 +310,16 @@ func (c *WorkerConnection) HandleSubscribe(message *JsonRpcRequest) (*JsonRpcRes
 
 	//extraNonce2Size := sc.JobManager.ExtraNonce2Size
 
+	// ToDo: Session resume
+
 	resp := &JsonRpcResponse{
 		Id: message.Id,
 		Result: Jsonify([]interface{}{
 			[][]string{
-				{"mining.set_difficulty", c.SubscriptionId},
 				{"mining.notify", c.SubscriptionId},
 			},
 			hex.EncodeToString(c.ExtraNonce1),
-			len(c.ExtraNonce1),
+			ExtraNonce2Size,
 		}),
 		Error: nil,
 	}
@@ -236,7 +327,41 @@ func (c *WorkerConnection) HandleSubscribe(message *JsonRpcRequest) (*JsonRpcRes
 }
 
 func (c *WorkerConnection) HandleSubmit(message *JsonRpcRequest, remoteAddress string) (*JsonRpcResponse, error) {
-	c.logInfo().Msg("handling submit")
+//mining.submit("username", "job id", "ExtraNonce2", "nTime", "nOnce")
+	username, _ := message.Params[0].MarshalJSON()
+	jobId, _ := message.Params[1].MarshalJSON()
+	ExtraNonce2, _ := message.Params[2].MarshalJSON()
+	nTime, _ := message.Params[3].MarshalJSON()
+	nOnce, _ := message.Params[4].MarshalJSON()
+
+
+	c.logInfo().
+		Str("method", string(message.Method) ).
+		Str("username",string(username)).
+		Str("jobId",string(jobId)).
+		Str("ExtraNonce2",string(ExtraNonce2)).
+		Str("nTime",string(nTime)).
+		Str("nOnce",string(nOnce)).
+		Msg("handling submit")
+
+
+	//share, minerResult := sc.JobManager.ProcessSubmit(
+	//	RawJsonToString(message.Params[1]),
+	//	sc.PreviousDifficulty,
+	//	sc.CurrentDifficulty,
+	//	sc.ExtraNonce1,
+	//	RawJsonToString(message.Params[2]),
+	//	RawJsonToString(message.Params[3]),
+	//	RawJsonToString(message.Params[4]),
+	//	sc.RemoteAddress,
+	//	RawJsonToString(message.Params[0]),
+	//)
+
+	//func (jm *JobManager) ProcessSubmit(jobId string, prevDiff, diff *big.Float, extraNonce1 []byte,
+	//	hexExtraNonce2, hexNTime, hexNonce string, ipAddr net.Addr, workerName string) (share *Share, minerResult *tasks.MinerResult) {
+	//	minerResult = new(tasks.MinerResult)
+
+
 	return nil, nil
 }
 
